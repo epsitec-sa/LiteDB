@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net35;net462;netstandard1.3</TargetFrameworks>
     <AssemblyName>LiteDB</AssemblyName>
-    <PackageId>LiteDB</PackageId>    
+    <PackageId>Epsitec.LiteDB</PackageId>    
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
     <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
