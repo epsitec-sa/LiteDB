@@ -16,13 +16,14 @@ namespace LiteDB
     {
         #region Properties + Ctor
 
+        private System.Random _rand;
         private TimeSpan _timeout;
         private IDiskService _disk;
         private CacheService _cache;
         private Logger _log;
         private LockState _state;
         private bool _shared = false;
-        private ReaderWriterLockSlim _thread = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
+        private ReaderWriterLockSlim _thread = new ReaderWriterLockSlim (LockRecursionPolicy.NoRecursion);
 
         internal LockService(IDiskService disk, CacheService cache, TimeSpan timeout, Logger log)
         {
@@ -31,6 +32,9 @@ namespace LiteDB
             _log = log;
             _timeout = timeout;
             _state = LockState.Unlocked;
+            _rand = new System.Random (26);
+
+            _log.Write (Logger.LOCK, "creating lock service with id {0}", _rand.Next ());
         }
 
         /// <summary>
@@ -47,13 +51,13 @@ namespace LiteDB
         /// </summary>
         public LockControl Shared()
         {
-            var read = this.ThreadRead();
-            var shared = this.LockShared();
+            var read = this.ThreadRead ();
+            var shared = this.LockShared ();
 
-            return new LockControl(() =>
+            return new LockControl (() =>
             {
-                shared();
-                read();
+                shared ();
+                read ();
             });
         }
 
@@ -62,13 +66,13 @@ namespace LiteDB
         /// </summary>
         public LockControl Reserved()
         {
-            var write = this.ThreadWrite();
-            var reserved = this.LockReserved();
+            var write = this.ThreadWrite ();
+            var reserved = this.LockReserved ();
 
-            return new LockControl(() =>
+            return new LockControl (() =>
             {
-                reserved();
-                write();
+                reserved ();
+                write ();
             });
         }
 
@@ -77,9 +81,9 @@ namespace LiteDB
         /// </summary>
         public LockControl Exclusive()
         {
-            var exclusive = this.LockExclusive();
+            var exclusive = this.LockExclusive ();
 
-            return new LockControl(exclusive);
+            return new LockControl (exclusive);
         }
 
         #endregion
@@ -92,26 +96,26 @@ namespace LiteDB
         /// </summary>
         private Action LockShared()
         {
-            lock(_disk)
+            lock (_disk)
             {
                 if (_state != LockState.Unlocked) return () => { };
 
-                _disk.Lock(LockState.Shared, _timeout);
+                _disk.Lock (LockState.Shared, _timeout);
 
                 _state = LockState.Shared;
                 _shared = true;
 
-                _log.Write(Logger.LOCK, "entered in shared lock mode");
+                _log.Write (Logger.LOCK, "entered in shared lock mode");
 
-                this.AvoidDirtyRead();
+                this.AvoidDirtyRead ();
 
                 return () =>
                 {
                     _shared = false;
-                    _disk.Unlock(LockState.Shared);
+                    _disk.Unlock (LockState.Shared);
                     _state = LockState.Unlocked;
 
-                    _log.Write(Logger.LOCK, "exited shared lock mode");
+                    _log.Write (Logger.LOCK, "exited shared lock mode");
                 };
             }
         }
@@ -122,30 +126,30 @@ namespace LiteDB
         /// </summary>
         private Action LockReserved()
         {
-            lock(_disk)
+            lock (_disk)
             {
                 if (_state == LockState.Reserved) return () => { };
 
-                _disk.Lock(LockState.Reserved, _timeout);
+                _disk.Lock (LockState.Reserved, _timeout);
 
                 _state = LockState.Reserved;
 
-                _log.Write(Logger.LOCK, "entered in reserved lock mode");
+                _log.Write (Logger.LOCK, "entered in reserved lock mode");
 
                 // can be a new lock, calls action to notifify
                 if (!_shared)
                 {
-                    this.AvoidDirtyRead();
+                    this.AvoidDirtyRead ();
                 }
 
                 // is new lock only when not came from a shared lock
                 return () =>
                 {
-                    _disk.Unlock(LockState.Reserved);
+                    _disk.Unlock (LockState.Reserved);
 
                     _state = _shared ? LockState.Shared : LockState.Unlocked;
 
-                    _log.Write(Logger.LOCK, "exited reserved lock mode");
+                    _log.Write (Logger.LOCK, "exited reserved lock mode");
                 };
             }
         }
@@ -158,33 +162,33 @@ namespace LiteDB
         {
             lock (_disk)
             {
-                if (_state != LockState.Reserved) throw new InvalidOperationException("Lock state must be reserved");
+                if (_state != LockState.Reserved) throw new InvalidOperationException ("Lock state must be reserved");
 
                 // has a shared lock? unlock first (will keep reserved lock)
                 if (_shared)
                 {
-                    _disk.Unlock(LockState.Shared);
+                    _disk.Unlock (LockState.Shared);
                 }
 
-                _disk.Lock(LockState.Exclusive, _timeout);
+                _disk.Lock (LockState.Exclusive, _timeout);
 
                 _state = LockState.Exclusive;
 
-                _log.Write(Logger.LOCK, "entered in exclusive lock mode");
+                _log.Write (Logger.LOCK, "entered in exclusive lock mode");
 
                 return () =>
                 {
-                    _disk.Unlock(LockState.Exclusive);
+                    _disk.Unlock (LockState.Exclusive);
                     _state = LockState.Reserved;
 
-                    _log.Write(Logger.LOCK, "exited exclusive lock mode");
+                    _log.Write (Logger.LOCK, "exited exclusive lock mode");
 
                     // if was in a shared lock before exclusive lock, back to shared again (still reserved lock)
                     if (_shared)
                     {
-                        _disk.Lock(LockState.Shared, _timeout);
+                        _disk.Lock (LockState.Shared, _timeout);
 
-                        _log.Write(Logger.LOCK, "backed to shared mode");
+                        _log.Write (Logger.LOCK, "backed to shared mode");
                     }
                 };
             }
@@ -199,14 +203,38 @@ namespace LiteDB
         /// </summary>
         private Action ThreadRead()
         {
+            var session = _rand.Next (0, 1000);
+            _log.Write (Logger.LOCK, "read session {0}", session);
+
             // if current thread are in read mode, do nothing
-            if (_thread.IsReadLockHeld || _thread.IsWriteLockHeld) return () => { };
+            if (_thread.IsReadLockHeld || _thread.IsWriteLockHeld)
+            {
+                _log.Write (Logger.LOCK, "{0}: returning because isreadlockheld {1}, iswritelockheld {2}",
+                    session, _thread.IsReadLockHeld, _thread.IsWriteLockHeld);
+                return () => { };
+            }
 
+            _log.Write (Logger.LOCK, "{0}: try entering read lock with timeout {1}", session, _timeout);
             // try enter in read mode
-            _thread.TryEnterReadLock(_timeout);
+            var res = _thread.TryEnterReadLock (_timeout);
+            _log.Write (Logger.LOCK, "{0}: read lock state is {1}", session, res);
 
-            // when dispose, close read mode
-            return _thread.ExitReadLock;
+
+            return () =>
+            {
+                // when dispose, close read mode
+                try
+                {
+                    _log.Write (Logger.LOCK, "{0} exiting read lock", session);
+                    _thread.ExitReadLock ();
+                }
+                catch (SynchronizationLockException)
+                {
+                    _log.Write (Logger.LOCK, "{0} current thread state is {1}",
+                            session, Newtonsoft.Json.JsonConvert.SerializeObject (_thread));
+                    throw;
+                }
+            };
         }
 
         /// <summary>
@@ -214,31 +242,63 @@ namespace LiteDB
         /// </summary>
         private Action ThreadWrite()
         {
+            var session = _rand.Next (0, 1000);
+            _log.Write (Logger.LOCK, "write session {0}", session);
+
             // if current thread is already in write mode, do nothing
-            if (_thread.IsWriteLockHeld) return () => { };
+            if (_thread.IsWriteLockHeld)
+            {
+                _log.Write (Logger.LOCK, "{0}: returning because iswritelockheld {1}",
+                    session, _thread.IsWriteLockHeld);
+                return () => { };
+            }
 
             // if current thread is in read mode, exit read mode first
             if (_thread.IsReadLockHeld)
             {
-                _thread.ExitReadLock();
-                _thread.TryEnterWriteLock(_timeout);
+                _log.Write (Logger.LOCK, "{0} readlock is held, exiting read lock", session);
+                _thread.ExitReadLock ();
+
+                _log.Write (Logger.LOCK, "{0}: try entering write lock with timeout {1}", session, _timeout);
+                var res = _thread.TryEnterWriteLock (_timeout);
+                _log.Write (Logger.LOCK, "{0}: write lock state is {1}", session, res);
 
                 // when dispose write mode, enter again in read mode
                 return () =>
                 {
-                    _thread.ExitWriteLock();
-                    _thread.TryEnterReadLock(_timeout);
+                    _log.Write (Logger.LOCK, "{0} exiting write lock", session);
+                    _thread.ExitWriteLock ();
+
+                    _log.Write (Logger.LOCK, "{0}: try entering read lock with timeout {1}", session, _timeout);
+                    var res2 = _thread.TryEnterReadLock (_timeout);
+                    _log.Write (Logger.LOCK, "{0}: read lock state is {1}", session, res2);
                 };
             }
 
+            _log.Write (Logger.LOCK, "{0}: try entering write lock with timeout {1}", session, _timeout);
+            var res3 = _thread.TryEnterWriteLock (_timeout);
+            _log.Write (Logger.LOCK, "{0}: write lock state is {1}", session, res3);
             // try enter in write mode
-            if (!_thread.TryEnterWriteLock(_timeout))
+            if (!res3)
             {
-                throw LiteException.LockTimeout(_timeout);
+                throw LiteException.LockTimeout (_timeout);
             }
 
             // and release when dispose
-            return () => _thread.ExitWriteLock();
+            return () =>
+            {
+                try
+                {
+                    _log.Write (Logger.LOCK, "{0} exiting write lock", session);
+                    _thread.ExitWriteLock ();
+                }
+                catch (SynchronizationLockException)
+                {
+                    _log.Write (Logger.LOCK, "{0} current thread state is {1}",
+                            session, Newtonsoft.Json.JsonConvert.SerializeObject (_thread));
+                    throw;
+                }
+            };
         }
 
         #endregion
@@ -252,25 +312,25 @@ namespace LiteDB
             // if disk are exclusive don't need check dirty read
             if (_disk.IsExclusive) return;
 
-            _log.Write(Logger.CACHE, "checking disk to avoid dirty read");
+            _log.Write (Logger.CACHE, "checking disk to avoid dirty read");
 
             // empty cache? just exit
             if (_cache.CleanUsed == 0) return;
 
             // get ChangeID from cache
-            var header = _cache.GetPage(0) as HeaderPage;
+            var header = _cache.GetPage (0) as HeaderPage;
             var changeID = header == null ? 0 : header.ChangeID;
 
             // and get header from disk
-            var disk = BasePage.ReadPage(_disk.ReadPage(0)) as HeaderPage;
+            var disk = BasePage.ReadPage (_disk.ReadPage (0)) as HeaderPage;
 
             // if header change, clear cache and add new header to cache
             if (disk.ChangeID != changeID)
             {
-                _log.Write(Logger.CACHE, "file changed from another process, cleaning all cache pages");
+                _log.Write (Logger.CACHE, "file changed from another process, cleaning all cache pages");
 
-                _cache.ClearPages();
-                _cache.AddPage(disk);
+                _cache.ClearPages ();
+                _cache.AddPage (disk);
             }
         }
     }
