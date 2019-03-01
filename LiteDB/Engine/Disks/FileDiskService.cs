@@ -89,18 +89,28 @@ namespace LiteDB
 
         public virtual void Dispose()
         {
-            if (_journal != null)
+            try
             {
-                _log.Write(Logger.DISK, "close journal file '{0}'", Path.GetFileName(_journalFilename));
-                _journal.Dispose();
-                _journal = null;
-                FileHelper.TryDelete(_journalFilename);
+                if (_journal != null)
+                {
+                    _log.Write (Logger.DISK, "close journal file '{0}'", Path.GetFileName (_journalFilename));
+                    _journal.Dispose ();
+                    _journal = null;
+                    FileHelper.TryDelete (_journalFilename);
+                }
             }
-            if (_stream != null)
+            catch (System.Exception)
             {
-                _log.Write(Logger.DISK, "close datafile '{0}'", Path.GetFileName(_filename));
-                _stream.Dispose();
-                _stream = null;
+                throw;
+            }
+            finally
+            {
+                if (_stream != null)
+                {
+                    _log.Write (Logger.DISK, "close datafile '{0}'", Path.GetFileName (_filename));
+                    _stream.Dispose ();
+                    _stream = null;
+                }
             }
         }
 
