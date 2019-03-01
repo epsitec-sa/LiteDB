@@ -175,17 +175,26 @@ namespace LiteDB
 
         public void Dispose()
         {
-            // if there is any open transaction, rollback
-            if (_transactions.Count > 0)
+            try
             {
-                this.Rollback();
+                // if there is any open transaction, rollback
+                if (_transactions.Count > 0)
+                {
+                    this.Rollback ();
+                }
             }
+            catch (System.Exception)
+            {
+                throw;
+            }
+            finally
+            {
+                // dispose datafile and journal file
+                _disk.Dispose ();
 
-            // dispose datafile and journal file
-            _disk.Dispose();
-
-            // dispose crypto
-            if (_crypto != null) _crypto.Dispose();
+                // dispose crypto
+                if (_crypto != null) _crypto.Dispose ();
+            }
         }
 
         /// <summary>

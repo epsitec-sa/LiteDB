@@ -55,11 +55,21 @@ namespace LiteDB
         /// </summary>
         public void Rollback()
         {
-            _trans.Rollback();
-
-            while (_transactions.Count > 0)
+            try
             {
-                _transactions.Pop().Dispose();
+                _log.Write (Logger.DISK, "rolling back transaction");
+                _trans.Rollback ();
+            }
+            catch (System.Exception)
+            {
+                throw;
+            }
+            finally
+            {
+                while (_transactions.Count > 0)
+                {
+                    _transactions.Pop ().Dispose ();
+                }
             }
         }
 
