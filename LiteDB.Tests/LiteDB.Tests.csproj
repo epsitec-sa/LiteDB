@@ -17,10 +17,14 @@
 
   <ItemGroup>
     <None Remove="Resources\Database_with_leak.db" />
+    <None Remove="Resources\ok\Db_ok.db" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Resources\corrupted\Db_with_leak.db">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\ok\Db_ok.db">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
