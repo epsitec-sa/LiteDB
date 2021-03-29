@@ -64,12 +64,20 @@ namespace LiteDB
         public IEnumerable<T> GetSeqPages<T>(uint firstPageID)
             where T : BasePage
         {
+            var readPageIDs = new HashSet<uint> ();
+
             var pageID = firstPageID;
 
             while (pageID != uint.MaxValue)
             {
+                if (readPageIDs.Contains (pageID))
+                {
+                    throw LiteException.FileCorrupted ("Circular pageID sequence detected");
+                }
+
                 var page = this.GetPage<T>(pageID);
 
+                readPageIDs.Add (pageID);
                 pageID = page.NextPageID;
 
                 yield return page;

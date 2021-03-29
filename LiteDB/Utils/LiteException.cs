@@ -72,9 +72,9 @@ namespace LiteDB
             return new LiteException(FILE_NOT_FOUND, "File '{0}' not found.", fileId);
         }
 
-        internal static LiteException FileCorrupted(string fileId)
+        internal static LiteException FileCorrupted(string message = "")
         {
-            return new LiteException(FILE_CORRUPTED, "File '{0}' has no content or is corrupted.", fileId);
+            return new LiteException(FILE_CORRUPTED, "File has no content or is corrupted ({0}).", message);
         }
 
         internal static LiteException InvalidDatabase()
