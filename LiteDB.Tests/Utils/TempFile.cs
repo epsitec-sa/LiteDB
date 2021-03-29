@@ -9,9 +9,15 @@ namespace LiteDB.Tests
     {
         public string Filename { get; private set; }
 
-        public TempFile(string ext = "db")
+        public TempFile(string resourceFilePath = null)
         {
-            this.Filename = Path.GetFullPath(string.Format("test-{0}.{1}", Guid.NewGuid(), ext));
+            this.Filename = Path.GetFullPath (string.Format ("test-{0}.db", Guid.NewGuid ()));
+
+            if (!string.IsNullOrWhiteSpace (resourceFilePath))
+            {
+                // Copy from resource
+                File.Copy (resourceFilePath, this.Filename);
+            }
         }
 
         public void CreateDatafile()
